@@ -5,7 +5,33 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:NetSweeper"
         mc:Ignorable="d"
-        Title="MainWindow" Height="350" Width="373.167">
-    <UniformGrid x:Name="gameGrid">
-    </UniformGrid>
+        Title="NetSweeper" Height="600" Width="600" Closing="Window_Closing" KeyDown="Window_KeyDown" Loaded="Window_Loaded">
+    <Grid>
+        <TabControl x:Name="tabControl" Margin="0,0,0,30">
+            <TabItem Header="Game View">
+                <Grid>
+                    <Label x:Name="statusLabel" Content="Status Text" VerticalAlignment="Top" Height="26" FontSize="14" FontFamily="Segoe UI Semibold" VerticalContentAlignment="Center"/>
+                    <UniformGrid x:Name="gameGrid" Margin="0,26,0,0"/>
+                </Grid>
+            </TabItem>
+            <TabItem Header="Settings">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition/>
+                    </Grid.ColumnDefinitions>
+                    <CheckBox x:Name="manualStepCheckBox" Content="Iterate Manually (Space)" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="5,5,0,0" Checked="manualStepCheckBox_Checked" Unchecked="manualStepCheckBox_Unchecked"/>
+
+                    <Label HorizontalAlignment="Left" VerticalAlignment="Top" Margin="5,30,0,0" Content="Update Frequency (Hz)" />
+                    <TextBox x:Name="updateFreq" HorizontalAlignment="Left" VerticalContentAlignment="Center" VerticalAlignment="Top" Margin="150,30,0,0" Width="45" Height="26" Text="4" HorizontalContentAlignment="Center" PreviewTextInput="TextBox_PreviewTextInput" KeyDown="TextBox_KeyDown" />
+                </Grid>
+            </TabItem>
+            <TabItem Header="Neuron View">
+                <Grid>
+                    
+                </Grid>
+            </TabItem>
+        </TabControl>
+        <Button x:Name="EnableDisableButton" Content="Start" VerticalAlignment="Bottom" Height="30" Width="120" Click="EnableDisableButton_Click"/>
+    </Grid>
 </Window>

@@ -20,15 +20,26 @@ namespace NetSweeper {
             public bool isExposed;
         }
 
+        public int seed { get; private set; }
+        public int mineCount { get; private set; }
+
         public int gameSize { get; private set; }
-        public int turns { get; private set; }
+        public int moves { get; private set; }
         public bool gameOver { get; private set; }
+        public bool win { get; private set; }
 
         public Tile[,] tiles { get; private set; }
         
-        public Game(int gameSize = 8, int mineCount = 10, int gameSeed = -1) {
+        public Game(int gameSize = 8, int mineCount = 10, int seed = -1) {
             this.gameSize = gameSize;
+            this.mineCount = mineCount;
 
+            this.seed = seed >= 0 ? seed : new Random().Next();
+
+            SetupBoard();
+        }
+
+        public void SetupBoard() {
             tiles = new Tile[gameSize, gameSize];
 
             var neighbors = new Point[]{
@@ -43,7 +54,7 @@ namespace NetSweeper {
             };
 
             // place mines randomly
-            Random r = gameSeed >= 0 ? new Random(gameSeed) : new Random();
+            Random r = new Random(seed);
             int x = r.Next(0, gameSize), y = r.Next(0, gameSize);
             for (int i = 0; i < mineCount; i++) {
                 while (tiles[x, y].isMine) { // make sure we pick a spot that isn't already a mine
@@ -57,23 +68,26 @@ namespace NetSweeper {
                         tiles[x + c.x, y + c.y].neighborMineCount++;
             }
 
-            turns = 0;
+            moves = 0;
             gameOver = false;
         }
 
-        public void PickTile(int x, int y) {
+        public void Move(int x, int y) {
             tiles[x, y].isExposed = true;
-            turns++;
+            moves++;
 
-            if (tiles[x, y].isMine)
+            if (tiles[x, y].isMine) {
                 gameOver = true;
+                win = false;
+            }
 
             if (tiles[x, y].neighborMineCount == 0) {
                 // flood fill empty tiles
                 FloodFillEmpty(x, y);
             }
-        }
 
+            CheckWin();
+        }
         void FloodFillEmpty(int x, int y) {
             List<Point> leads = new List<Point>();
             List<Point> nleads = new List<Point>();
@@ -95,7 +109,6 @@ namespace NetSweeper {
                 leads.AddRange(nleads);
             }
         }
-
         bool FloodCheckTile(int x, int y) {
             if (x >= 0 && x < gameSize && y >= 0 && y < gameSize) {
                 if (!tiles[x, y].isExposed) {
@@ -104,6 +117,19 @@ namespace NetSweeper {
                 }
             }
             return false;
+        }
+
+        void CheckWin() {
+            bool win = true;
+            for (int x = 0; x < gameSize && win; x++)
+                for (int y = 0; y < gameSize && win; y++)
+                    if (!tiles[x, y].isExposed && !tiles[x, y].isMine)
+                        win = false;
+
+            if (win) {
+                this.win = true;
+                gameOver = true;
+            }
         }
     }
 }
