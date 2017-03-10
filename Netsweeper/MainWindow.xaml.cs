@@ -32,12 +32,16 @@ namespace NetSweeper {
         }
 
         private void Timer_Tick(object sender, EventArgs e) {
+#if DEBUG
+            NetworkController.Update();
+#else
             try {
                 NetworkController.Update();
             } catch (Exception ex) {
                 if (MessageBox.Show(ex.StackTrace, ex.Message, MessageBoxButton.OKCancel, MessageBoxImage.Error) == MessageBoxResult.Cancel)
                     Close();
             }
+#endif
             Redraw();
         }
 

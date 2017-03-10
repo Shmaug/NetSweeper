@@ -303,10 +303,11 @@ namespace NetSweeper {
             int fitness = game.moves + game.exposedCount;
             if (fitness == 0)
                 fitness = -1;
-            if (game.win)
-                fitness += 1000;
-            else
-                fitness -= 500;
+            if (game.gameOver)
+                if (game.win)
+                    fitness += 1000;
+                else
+                    fitness -= 500;
 
             pool.currentFitness = fitness;
             if (fitness > pool.maxFitness)
