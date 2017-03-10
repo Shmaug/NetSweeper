@@ -22,9 +22,10 @@ namespace NetSweeper {
 
         public int seed { get; private set; }
         public int mineCount { get; private set; }
-
         public int gameSize { get; private set; }
+
         public int moves { get; private set; }
+        public int exposedCount { get; private set; }
         public bool gameOver { get; private set; }
         public bool win { get; private set; }
 
@@ -69,6 +70,7 @@ namespace NetSweeper {
             }
 
             moves = 0;
+            exposedCount = 0;
             gameOver = false;
         }
 
@@ -121,10 +123,13 @@ namespace NetSweeper {
 
         void CheckWin() {
             bool win = true;
-            for (int x = 0; x < gameSize && win; x++)
-                for (int y = 0; y < gameSize && win; y++)
+            exposedCount = 0;
+            for (int x = 0; x < gameSize; x++)
+                for (int y = 0; y < gameSize; y++) {
+                    if (tiles[x, y].isExposed) exposedCount++;
                     if (!tiles[x, y].isExposed && !tiles[x, y].isMine)
                         win = false;
+                }
 
             if (win) {
                 this.win = true;

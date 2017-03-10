@@ -1,8 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.IO;
 
 namespace NetSweeper {
     class Pool {
@@ -10,10 +9,10 @@ namespace NetSweeper {
         public int generation = 0;
         public int currentSpecies = 0;
         public int currentGenome = 0;
-        public int currentMove = 0;
+        public int currentFrame = 0;
+        public int currentFitness;
         public int maxFitness = 0;
         public int innovation = NetworkController.OutputCount;
-
         
         public void Initialize() {
             for (int i = 0; i < NetworkController.Population; i++)
@@ -85,8 +84,7 @@ namespace NetSweeper {
 
             species = survived;
         }
-
-
+        
         public void RankGlobally() {
             List<Genome> global = new List<Genome>();
 
@@ -139,6 +137,80 @@ namespace NetSweeper {
                 }
             }
         }
+
+        public void SaveToFile(string file) {
+            using (FileStream fs = File.Open(file, FileMode.OpenOrCreate)) {
+                using (BinaryWriter bw = new BinaryWriter(fs)) {
+                    bw.Write(generation);
+                    bw.Write(maxFitness);
+                    bw.Write(species.Count);
+                    foreach (Species s in species) {
+                        bw.Write(s.topFitness);
+                        bw.Write(s.staleness);
+                        bw.Write(s.genomes.Count);
+                        foreach (Genome genome in s.genomes) {
+                            bw.Write(genome.fitness);
+                            bw.Write(genome.maxNeuron);
+                            bw.Write(genome.connectionsRate);
+                            bw.Write(genome.linkRate);
+                            bw.Write(genome.biasRate);
+                            bw.Write(genome.nodeRate);
+                            bw.Write(genome.enableRate);
+                            bw.Write(genome.disableRate);
+                            bw.Write(genome.stepRate);
+                            bw.Write(genome.genes.Count);
+                            foreach (Gene gene in genome.genes) {
+                                bw.Write(gene.into);
+                                bw.Write(gene.@out);
+                                bw.Write(gene.weight);
+                                bw.Write(gene.enabled);
+                                bw.Write(gene.innovation);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        public void LoadFile(string file) {
+            using (FileStream fs = File.Open(file, FileMode.Open)) {
+                using (BinaryReader br = new BinaryReader(fs)) {
+                    generation = br.ReadInt32();
+                    maxFitness = br.ReadInt32();
+                    int scount = br.ReadInt32();
+                    for (int i = 0; i < scount; i++) {
+                        Species s = new Species();
+                        s.topFitness = br.ReadInt32();
+                        s.staleness = br.ReadInt32();
+                        int gcount = br.ReadInt32();
+                        for (int j = 0; j < gcount; j++) {
+                            Genome genome = new Genome();
+                            genome.fitness = br.ReadInt32();
+                            genome.maxNeuron = br.ReadInt32();
+                            genome.connectionsRate = br.ReadSingle();
+                            genome.linkRate = br.ReadSingle();
+                            genome.biasRate = br.ReadSingle();
+                            genome.nodeRate = br.ReadSingle();
+                            genome.enableRate = br.ReadSingle();
+                            genome.disableRate = br.ReadSingle();
+                            genome.stepRate = br.ReadSingle();
+                            int genecount = br.ReadInt32();
+                            for (int k = 0; k < genecount; k++) {
+                                Gene gene = new Gene();
+                                gene.into = br.ReadInt32();
+                                gene.@out = br.ReadInt32();
+                                gene.weight = br.ReadSingle();
+                                gene.enabled = br.ReadBoolean();
+                                gene.innovation = br.ReadInt32();
+                                genome.genes.Add(gene);
+                            }
+                            s.genomes.Add(genome);
+                        }
+                        species.Add(s);
+                    }
+                }
+            }
+        }
     }
     class NetworkController {
         public static Game game;
@@ -173,44 +245,86 @@ namespace NetSweeper {
             pool.Initialize();
         }
 
-        public static Point EvaluateCurrent() {
-            List<int> inputs = new List<int>();
+        public static float[] inputs, outputs;
+
+        struct mv { public Point pt; public float w; }
+        public static List<Point> EvaluateCurrent() {
+            float[] @in = new float[InputCount];
+            
             for (int x = 0; x < game.gameSize; x++)
-                for (int y = 0; y < game.gameSize; y++)
-                    inputs.Add(game.tiles[x, y].isMine ? -1 : game.tiles[x, y].neighborMineCount);
+                for (int y = 0; y < game.gameSize; y++) {
+                    float s = -1f;
+                    if (!game.tiles[x, y].isExposed) {
+                        s = 1f;
+                        for (int x2 = Math.Max(0, x - 1); x2 <= Math.Min(game.gameSize - 1, x + 1); x2++)
+                            for (int y2 = Math.Max(0, y - 1); y2 <= Math.Min(game.gameSize - 1, y + 1); y2++)
+                                if (game.tiles[x2, y2].isExposed)
+                                    s += 1f / Math.Max(1f, game.tiles[x2, y2].neighborMineCount);
+                    }
+                    @in[x + y * game.gameSize] = s;
+                }
+            @in[InputCount - 1] = 1;
+            
+            float[] @out = pool.species[pool.currentSpecies].genomes[pool.currentGenome].network.Evaluate(@in);
 
-            return pool.species[pool.currentSpecies].genomes[pool.currentGenome].network.Evaluate(inputs);
+            inputs = @in;
+            outputs = @out;
+
+            List<mv> mvs = new List<mv>();
+
+            for (int i = 0; i < outputs.Length; i++)
+                if (outputs[i] > 0)
+                    mvs.Add(new mv() { pt = new Point(i % game.gameSize, i / game.gameSize), w = outputs[i] });
+            mvs.OrderByDescending(m => m.w);
+
+            List<Point> pts = new List<Point>();
+            foreach (mv m in mvs) pts.Add(m.pt);
+            return pts;
         }
+        
+        static int maxIdleTimeout = 3;
+        static int idleTimeout = maxIdleTimeout;
+        static int lastExposed = 0;
+        public static List<Point> curMoves = new List<Point>();
 
-        static Point lastPoint;
-        static int pointPenalty = 3;
         public static void Update() {
-            Point pt = EvaluateCurrent();
-            pool.currentMove++;
-            game.Move(pt.x, pt.y);
-
-            if (pool.currentMove == 0 || pt.x != lastPoint.x || pt.y != lastPoint.y)
-                pointPenalty = 3;
+            List<Point> cur = EvaluateCurrent();
+            foreach (Point p in cur) {
+                game.Move(p.x, p.y);
+                if (game.gameOver) break;
+            }
+            pool.currentFrame++;
+            
+            if (lastExposed == game.exposedCount)
+                idleTimeout--;
             else
-                pointPenalty--;
+                idleTimeout = maxIdleTimeout;
 
-            if (game.gameOver || (pool.currentMove > 0 && pt.x == lastPoint.x && pt.y == lastPoint.y && pointPenalty <= 0)) {
-                int fitness = game.moves;
-                if (game.win)
-                    fitness += 10;
-                if (fitness == 0)
-                    fitness = -1;
+            int fitness = game.moves + game.exposedCount;
+            if (fitness == 0)
+                fitness = -1;
+            if (game.win)
+                fitness += 1000;
+            else
+                fitness -= 500;
+
+            pool.currentFitness = fitness;
+            if (fitness > pool.maxFitness)
+                pool.maxFitness = fitness;
+
+            if (game.gameOver || idleTimeout < 0) {
                 pool.species[pool.currentSpecies].genomes[pool.currentGenome].fitness = fitness;
-                if (fitness > pool.maxFitness)
-                    pool.maxFitness = fitness;
 
+                idleTimeout = maxIdleTimeout;
                 pool.currentSpecies = 0;
                 pool.currentGenome = 0;
                 while (pool.species[pool.currentSpecies].genomes[pool.currentGenome].fitness != 0)
                     pool.NextGenome();
 
                 new Network(pool.species[pool.currentSpecies].genomes[pool.currentGenome]);
-                pool.currentMove = 0;
+                pool.currentFrame = 0;
+                pool.currentFitness = 0;
+                inputs = outputs = null;
                 game.SetupBoard();
             }
 
@@ -222,7 +336,52 @@ namespace NetSweeper {
                         measured++;
                 }
 
-            lastPoint = pt;
+            lastExposed = game.exposedCount;
+        }
+        
+        public static void Save(string name) {
+            string file = AppDomain.CurrentDomain.BaseDirectory;
+            pool.SaveToFile(file + name + ".pool");
+        }
+        public static void Load(string name) {
+            string file = AppDomain.CurrentDomain.BaseDirectory + name + ".pool";
+            if (File.Exists(file)) {
+                pool = new Pool();
+                pool.LoadFile(file);
+
+                idleTimeout = maxIdleTimeout;
+                pool.currentSpecies = 0;
+                pool.currentGenome = 0;
+                while (pool.species[pool.currentSpecies].genomes[pool.currentGenome].fitness != 0)
+                    pool.NextGenome();
+
+                new Network(pool.species[pool.currentSpecies].genomes[pool.currentGenome]);
+                pool.currentFrame = 0;
+                pool.currentFitness = 0;
+                inputs = outputs = null;
+                game.SetupBoard();
+            }
+        }
+
+        public static void LoadTop() {
+            int maxg = 0, maxs = 0;
+            int maxfitness = 0;
+            for (int s = 0; s < pool.species.Count; s++)
+                for (int g = 0; g < pool.species[s].genomes.Count; g++) {
+                    if (pool.species[s].genomes[g].fitness > maxfitness) {
+                        maxfitness = pool.species[s].genomes[g].fitness;
+                        maxg = g;
+                        maxs = s;
+                    }
+                }
+
+            pool.currentSpecies = maxs;
+            pool.currentGenome = maxg;
+            new Network(pool.species[pool.currentSpecies].genomes[pool.currentGenome]);
+            pool.currentFitness = 0;
+            pool.currentFrame = 0;
+            inputs = outputs = null;
+            game.SetupBoard();
         }
     }
 }

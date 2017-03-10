@@ -5,33 +5,40 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:NetSweeper"
         mc:Ignorable="d"
-        Title="NetSweeper" Height="600" Width="600" Closing="Window_Closing" KeyDown="Window_KeyDown" Loaded="Window_Loaded">
+        Title="NetSweeper" Height="751" Width="650" Loaded="Window_Loaded" Icon="icon.ico">
     <Grid>
-        <TabControl x:Name="tabControl" Margin="0,0,0,30">
+        <Label x:Name="statusLabel" Content="Status Text" VerticalAlignment="Top" Height="26" FontSize="14" FontFamily="Segoe UI Semibold" VerticalContentAlignment="Center" Grid.ColumnSpan="2" Margin="0,0,100,0"/>
+        <Button x:Name="PlayTopButton" Content="Play Best" VerticalAlignment="Top" Width="100" HorizontalAlignment="Right" Margin="0,3,0,0" Click="PlayTopButton_Click" Grid.Column="1" />
+        <TabControl x:Name="tabControl" Margin="0,26,0,30" Grid.ColumnSpan="2">
             <TabItem Header="Game View">
                 <Grid>
-                    <Label x:Name="statusLabel" Content="Status Text" VerticalAlignment="Top" Height="26" FontSize="14" FontFamily="Segoe UI Semibold" VerticalContentAlignment="Center"/>
-                    <UniformGrid x:Name="gameGrid" Margin="0,26,0,0"/>
+                    <UniformGrid x:Name="gameGrid" Margin="0,0,0,0" Grid.ColumnSpan="2"/>
                 </Grid>
             </TabItem>
             <TabItem Header="Settings">
                 <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition/>
-                    </Grid.ColumnDefinitions>
-                    <CheckBox x:Name="manualStepCheckBox" Content="Iterate Manually (Space)" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="5,5,0,0" Checked="manualStepCheckBox_Checked" Unchecked="manualStepCheckBox_Unchecked"/>
-
-                    <Label HorizontalAlignment="Left" VerticalAlignment="Top" Margin="5,30,0,0" Content="Update Frequency (Hz)" />
-                    <TextBox x:Name="updateFreq" HorizontalAlignment="Left" VerticalContentAlignment="Center" VerticalAlignment="Top" Margin="150,30,0,0" Width="45" Height="26" Text="4" HorizontalContentAlignment="Center" PreviewTextInput="TextBox_PreviewTextInput" KeyDown="TextBox_KeyDown" />
+                    <Label HorizontalAlignment="Left" VerticalAlignment="Top" Margin="5,5,0,0" Content="Update Frequency (Hz)" />
+                    <CheckBox x:Name="checkBox" Content="No delay" VerticalContentAlignment="Center" Width="100" Margin="240,5,0,0" Checked="noDelay_Checked" HorizontalAlignment="Left" VerticalAlignment="Top" Height="26" Unchecked="noDelay_Unchecked"/>
+                    <TextBox x:Name="updateFreq" HorizontalAlignment="Left" VerticalContentAlignment="Center" VerticalAlignment="Top" Margin="150,5,0,0" Width="75" Height="26" Text="90" HorizontalContentAlignment="Center" PreviewTextInput="TextBox_PreviewTextInput" />
+                    <TextBox x:Name="SaveName" HorizontalContentAlignment="Right" Text="Pool 1" VerticalAlignment="Bottom" Height="20" Margin="20,0,240,11" />
+                    <Button x:Name="SaveButton" Content="Save" VerticalAlignment="Bottom" HorizontalAlignment="Right" Width="100" Margin="0,0,130,11"/>
+                    <Button x:Name="LoadButton" Content="Load" HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="100" Margin="0,0,20,11"/>
                 </Grid>
             </TabItem>
             <TabItem Header="Neuron View">
-                <Grid>
-                    
+                <Grid x:Name="NeuronViewGrid">
+                    <Label x:Name="NeuronViewLabel" Content="0 Neurons" VerticalAlignment="Top" HorizontalContentAlignment="Center" HorizontalAlignment="Center" Margin="0,5,0,0" />
+                    <Label Content="Input" VerticalAlignment="Top" HorizontalContentAlignment="Center" HorizontalAlignment="Left" Margin="30,5,0,0" FontFamily="Segoe UI Semibold" FontSize="18" />
+                    <Label Content="Output" VerticalAlignment="Top" HorizontalContentAlignment="Center" HorizontalAlignment="Right" Margin="0,5,30,0" FontFamily="Segoe UI Semibold" FontSize="18" />
+
+                    <UniformGrid x:Name="inputGrid" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="10,50,0,0" Width="200" Height="200" Grid.ColumnSpan="2" Background="Black" />
+                    <UniformGrid x:Name="outputGrid" Width="200" Height="200" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,50,10,0" Grid.Column="1" Background="Black" />
+                    <Rectangle x:Name="biasCell" HorizontalAlignment="Left" VerticalAlignment="Top" Width="15" Height="15" Fill="#FF7F7F7F" Margin="207,270,0,0" />
+
+                    <Rectangle x:Name="NeuronArea" VerticalAlignment="Top" Height="200" Margin="220,50,220,0" Fill="#FFD1D1D1" />
                 </Grid>
             </TabItem>
         </TabControl>
-        <Button x:Name="EnableDisableButton" Content="Start" VerticalAlignment="Bottom" Height="30" Width="120" Click="EnableDisableButton_Click"/>
+        <Button x:Name="EnableDisableButton" Content="Start" VerticalAlignment="Bottom" Height="26" Width="120" Click="EnableDisableButton_Click" Margin="0,0,0,2" FontSize="18" FontFamily="Segoe UI Semibold" Grid.Column="1"/>
     </Grid>
 </Window>

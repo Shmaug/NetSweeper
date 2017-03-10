@@ -37,7 +37,6 @@ namespace NetSweeper {
     }
     class Genome {
         public int fitness = 0;
-        public int adjustedFitness = 0;
         public Network network;
         public int maxNeuron = 0;
         public int globalRank = 0;
@@ -48,8 +47,8 @@ namespace NetSweeper {
         public float linkRate = 2f;
         public float biasRate = .4f;
         public float nodeRate = .5f;
-        public float enableRate = .2f;
-        public float disableRate = .4f;
+        public float enableRate = .5f;
+        public float disableRate = .3f;
         public float stepRate = .1f;
 
         public static Genome Basic {
@@ -87,10 +86,11 @@ namespace NetSweeper {
             int neuron1 = Neuron.RandomNeuron(genome.genes, false, NetworkController.random);
             int neuron2 = Neuron.RandomNeuron(genome.genes, true, NetworkController.random);
 
-            if (neuron1 <= NetworkController.InputCount && neuron2 <= NetworkController.InputCount)
+            if (neuron1 < NetworkController.InputCount && neuron2 <= NetworkController.InputCount)
                 // both input nodes
                 return;
-            if (neuron2 <= NetworkController.InputCount) {
+
+            if (neuron2 < NetworkController.InputCount) {
                 // swap input and output
                 int tmp = neuron1;
                 neuron1 = neuron2;
@@ -98,7 +98,7 @@ namespace NetSweeper {
             }
 
             Gene newLink = Gene.Default;
-            newLink.into = forceBias ? NetworkController.InputCount : neuron1;
+            newLink.into = forceBias ? NetworkController.InputCount - 1 : neuron1;
             newLink.@out = neuron2;
 
             if (containsLink(genome, newLink)) return;
@@ -225,8 +225,8 @@ namespace NetSweeper {
                 innovations2[g.innovation] = g;
 
             foreach (Gene g in genome1.genes) {
-                Gene g2 = innovations2[g.innovation];
-                if (g2 != null && NetworkController.random.NextDouble() > .5 && g2.enabled)
+                Gene g2;
+                if (innovations2.TryGetValue(g.innovation, out g2) && NetworkController.random.NextDouble() > .5 && g2.enabled)
                     child.genes.Add(Gene.Copy(g2));
                 else
                     child.genes.Add(Gene.Copy(g));
@@ -325,10 +325,10 @@ namespace NetSweeper {
 
         public static int RandomNeuron(List<Gene> genes, bool nonInput, Random r) {
             List<int> neurons = new List<int>();
-            if (!nonInput) {
+            if (!nonInput)
                 for (int i = 0; i < NetworkController.InputCount; i++)
                     neurons.Add(i);
-            }
+
             for (int i = 0; i < NetworkController.OutputCount; i++)
                 neurons.Add(NetworkController.MaxNodes + i);
 
@@ -363,7 +363,7 @@ namespace NetSweeper {
                         neurons[gene.@out] = new Neuron();
                     Neuron neuron = neurons[gene.@out];
                     neuron.incoming.Add(gene);
-                    if (neurons.ContainsKey(gene.into))
+                    if (!neurons.ContainsKey(gene.into))
                         neurons[gene.into] = new Neuron();
                 }
             }
@@ -374,12 +374,9 @@ namespace NetSweeper {
         static float Sigmoid(float x) {
             return 2f / (1f + (float)Math.Exp(-4.9f * x)) - 1f;
         }
-
-        public Point Evaluate(List<int> inputs) {
-            inputs.Add(1);
-            if (inputs.Count != NetworkController.InputCount) throw new Exception("Wrong amount of inputs");
-
-            for (int i = 0; i < inputs.Count; i++)
+        
+        public float[] Evaluate(float[] inputs) {
+            for (int i = 0; i < inputs.Length; i++)
                 neurons[i].value = inputs[i];
 
             foreach (KeyValuePair<int, Neuron> kp in neurons) {
@@ -387,24 +384,17 @@ namespace NetSweeper {
 
                 float sum = 0;
                 foreach (Gene incoming in neuron.incoming)
-                    if (neurons.ContainsKey(incoming.into))
-                        sum += incoming.weight * neurons[incoming.into].value;
+                    sum += incoming.weight * neurons[incoming.into].value;
 
                 if (neuron.incoming.Count > 0)
                     neuron.value = Sigmoid(sum);
             }
 
-            int highest = 0;
-            float hval = 0;
-            for (int i = 0; i < NetworkController.OutputCount; i++) {
-                if (neurons[NetworkController.MaxNodes + i].value > hval) {
-                    highest = i;
-                    hval = neurons[NetworkController.MaxNodes + i].value;
-                }
-            }
-
-            int x = highest % NetworkController.game.gameSize, y = highest / NetworkController.game.gameSize;
-            return new Point(x, y);
+            float[] o = new float[NetworkController.OutputCount];
+            for (int i = 0; i < NetworkController.OutputCount; i++)
+                o[i] = neurons[NetworkController.MaxNodes + i].value;
+            
+            return o;
         }
     }
 }
