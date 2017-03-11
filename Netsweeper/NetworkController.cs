@@ -13,7 +13,7 @@ namespace NetSweeper {
         public int currentFitness;
         public int maxFitness = 0;
         public int innovation = NetworkController.OutputCount;
-        
+
         public void Initialize() {
             for (int i = 0; i < NetworkController.Population; i++)
                 AddToSpecies(Genome.Basic);
@@ -29,9 +29,10 @@ namespace NetSweeper {
         public void AddToSpecies(Genome genome) {
             bool foundSpecies = false;
             foreach (Species s in species) {
-                if (!foundSpecies && Genome.SameSpecies(genome, s.genomes[0])) {
+                if (Genome.SameSpecies(genome, s.genomes[0])) {
                     foundSpecies = true;
                     s.genomes.Add(genome);
+                    break;
                 }
             }
 
@@ -47,12 +48,10 @@ namespace NetSweeper {
             species.ForEach(s => total += s.averageFitness);
             return total;
         }
-        
+
         public void CullSpecies(bool cutToOne) {
-            foreach (Species s in species) {
-                s.genomes = s.genomes.OrderByDescending(g => g.fitness).ToList();
-                s.genomes = s.genomes.Take(cutToOne ? 1 : (int)Math.Ceiling(s.genomes.Count / 2f)).ToList();
-            }
+            foreach (Species s in species)
+                s.genomes = s.genomes.OrderByDescending(g => g.fitness).Take(cutToOne ? 1 : (int)Math.Ceiling(s.genomes.Count / 2f)).ToList();
         }
         public void RemoveStaleSpecies() {
             List<Species> survived = new List<Species>();
@@ -76,15 +75,13 @@ namespace NetSweeper {
             List<Species> survived = new List<Species>();
 
             float sum = TotalAverageFitness();
-            foreach (Species s in species) {
-                int breed = (int)Math.Floor(s.averageFitness / sum * NetworkController.Population);
-                if (breed >= 1)
+            foreach (Species s in species)
+                if (Math.Floor(s.averageFitness / sum * NetworkController.Population) >= 1)
                     survived.Add(s);
-            }
 
             species = survived;
         }
-        
+
         public void RankGlobally() {
             List<Genome> global = new List<Genome>();
 
@@ -92,16 +89,20 @@ namespace NetSweeper {
                 global.AddRange(s.genomes);
 
             global.OrderBy(g => g.fitness);
-            
+
             for (int i = 0; i < global.Count; i++)
                 global[i].globalRank = i;
         }
 
         public void NewGeneration() {
+            int specCount = species.Count;
+
             CullSpecies(false);
             RankGlobally();
             RemoveStaleSpecies();
             RankGlobally();
+
+            int specCount2 = species.Count;
 
             foreach (Species s in species)
                 s.CalculateAverageFitness();
@@ -111,10 +112,12 @@ namespace NetSweeper {
             List<Genome> children = new List<Genome>();
             float sum = TotalAverageFitness();
             foreach (Species s in species) {
-                int breed = (int)Math.Floor(s.averageFitness / sum * NetworkController.Population) - 1;
+                int breed = (int)Math.Floor(s.averageFitness / sum * NetworkController.Population);
                 for (int i = 0; i < breed; i++)
                     children.Add(s.BreedChild());
             }
+
+            int childCount = children.Count;
 
             CullSpecies(true);
 
@@ -171,7 +174,6 @@ namespace NetSweeper {
                 }
             }
         }
-
         public void LoadFile(string file) {
             using (FileStream fs = File.Open(file, FileMode.Open)) {
                 using (BinaryReader br = new BinaryReader(fs)) {
@@ -226,31 +228,48 @@ namespace NetSweeper {
 
         public static float DeltaDisjoint = 2f;
         public static float DeltaWeights = .4f;
-        public static float DeltaThreshold = 1f;
+        public static float DeltaThreshold = .85f;
 
-        public static int StaleSpecies = 15;
+        public static int StaleSpecies = 30;
 
         public static Pool pool;
 
         public static Random random;
 
+        public static float[] inputs, outputs;
+        public static List<Point> curMoves = new List<Point>();
+        static int maxIdleTimeout = 3;
+        static int idleTimeout = maxIdleTimeout;
+        static int lastExposed = 0;
+
+
         public static void Initialize(Game game) {
             NetworkController.game = game;
             InputCount = game.gameSize * game.gameSize + 1;
             OutputCount = game.gameSize * game.gameSize;
-            
+
             random = new Random();
 
             pool = new Pool();
             pool.Initialize();
         }
 
-        public static float[] inputs, outputs;
+        static void EvaluateNextGenome() {
+            pool.currentSpecies = pool.currentGenome = 0;
+            while (pool.species[pool.currentSpecies].genomes[pool.currentGenome].fitness != 0)
+                pool.NextGenome();
+
+            new Network(pool.species[pool.currentSpecies].genomes[pool.currentGenome]);
+            idleTimeout = maxIdleTimeout;
+            pool.currentFrame = pool.currentFitness = lastExposed = 0;
+            inputs = outputs = null;
+            game.SetupBoard();
+        }
 
         struct mv { public Point pt; public float w; }
-        public static List<Point> EvaluateCurrent() {
+        static List<Point> EvaluateCurrent() {
             float[] @in = new float[InputCount];
-            
+
             for (int x = 0; x < game.gameSize; x++)
                 for (int y = 0; y < game.gameSize; y++) {
                     float s = -1f;
@@ -264,7 +283,7 @@ namespace NetSweeper {
                     @in[x + y * game.gameSize] = s;
                 }
             @in[InputCount - 1] = 1;
-            
+
             float[] @out = pool.species[pool.currentSpecies].genomes[pool.currentGenome].network.Evaluate(@in);
 
             inputs = @in;
@@ -281,11 +300,6 @@ namespace NetSweeper {
             foreach (mv m in mvs) pts.Add(m.pt);
             return pts;
         }
-        
-        static int maxIdleTimeout = 3;
-        static int idleTimeout = maxIdleTimeout;
-        static int lastExposed = 0;
-        public static List<Point> curMoves = new List<Point>();
 
         public static void Update() {
             List<Point> cur = EvaluateCurrent();
@@ -294,52 +308,34 @@ namespace NetSweeper {
                 if (game.gameOver) break;
             }
             pool.currentFrame++;
-            
+
+            // after 3 turns of not exposing new tiles, force to stop
             if (lastExposed == game.exposedCount)
                 idleTimeout--;
             else
                 idleTimeout = maxIdleTimeout;
+            lastExposed = game.exposedCount;
 
             int fitness = game.moves + game.exposedCount;
-            if (fitness == 0)
-                fitness = -1;
             if (game.gameOver)
                 if (game.win)
-                    fitness += 1000;
+                    fitness += 1000; // win bonus
                 else
-                    fitness -= 500;
+                    fitness -= 500; // mine penalty
+
+            if (fitness == 0)
+                fitness = -1; // genomes with a score of 0 are supposed to be unevaluated
 
             pool.currentFitness = fitness;
-            if (fitness > pool.maxFitness)
-                pool.maxFitness = fitness;
+            if (fitness > pool.maxFitness) pool.maxFitness = fitness;
 
-            if (game.gameOver || idleTimeout < 0) {
+            if (game.gameOver || idleTimeout <= 0) {
                 pool.species[pool.currentSpecies].genomes[pool.currentGenome].fitness = fitness;
 
-                idleTimeout = maxIdleTimeout;
-                pool.currentSpecies = 0;
-                pool.currentGenome = 0;
-                while (pool.species[pool.currentSpecies].genomes[pool.currentGenome].fitness != 0)
-                    pool.NextGenome();
-
-                new Network(pool.species[pool.currentSpecies].genomes[pool.currentGenome]);
-                pool.currentFrame = 0;
-                pool.currentFitness = 0;
-                inputs = outputs = null;
-                game.SetupBoard();
+                EvaluateNextGenome();
             }
-
-            int measured = 0, total = 0;
-            foreach (Species s in pool.species)
-                foreach (Genome g in s.genomes) {
-                    total++;
-                    if (g.fitness != 0)
-                        measured++;
-                }
-
-            lastExposed = game.exposedCount;
         }
-        
+
         public static void Save(string name) {
             string file = AppDomain.CurrentDomain.BaseDirectory;
             pool.SaveToFile(file + name + ".pool");
@@ -350,17 +346,7 @@ namespace NetSweeper {
                 pool = new Pool();
                 pool.LoadFile(file);
 
-                idleTimeout = maxIdleTimeout;
-                pool.currentSpecies = 0;
-                pool.currentGenome = 0;
-                while (pool.species[pool.currentSpecies].genomes[pool.currentGenome].fitness != 0)
-                    pool.NextGenome();
-
-                new Network(pool.species[pool.currentSpecies].genomes[pool.currentGenome]);
-                pool.currentFrame = 0;
-                pool.currentFitness = 0;
-                inputs = outputs = null;
-                game.SetupBoard();
+                EvaluateNextGenome();
             }
         }
 
